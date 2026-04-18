@@ -21,7 +21,7 @@ class RegisterRequest extends FormRequest
             'password' => ['required', 'string', 'min:6', 'confirmed'],
             'role' => ['required', Rule::in(['PATIENT', 'DOCTOR'])],
 
-            'gender' => [Rule::requiredIf($this->role === 'PATIENT'), 'nullable', Rule::in(['MALE', 'FEMALE'])],
+            'gender' => ['required', 'nullable', Rule::in(['MALE', 'FEMALE'])],
             'date_of_birth' => [Rule::requiredIf($this->role === 'PATIENT'), 'nullable', 'date'],
             'address' => ['nullable', 'string', 'max:255'],
             'medical_history' => ['nullable', 'string'],
@@ -31,4 +31,13 @@ class RegisterRequest extends FormRequest
             'bio' => ['nullable', 'string'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'email.unique' => 'User already exists with this email.',
+            'specialty.required_if' => 'Specialty is required when role is DOCTOR.',
+        ];
+    }
+
 }

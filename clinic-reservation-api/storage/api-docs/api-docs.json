@@ -7,7 +7,7 @@
     },
     "servers": [
         {
-            "url": "http://127.0.0.1:8000",
+            "url": "http://clinic-reservation-api.test",
             "description": "Local server"
         }
     ],
@@ -34,12 +34,12 @@
                                 "properties": {
                                     "full_name": {
                                         "type": "string",
-                                        "example": "Ahmed Hassan"
+                                        "example": "Hossam Mahmoud"
                                     },
                                     "email": {
                                         "type": "string",
                                         "format": "email",
-                                        "example": "ahmed@example.com"
+                                        "example": "hossam@example.com"
                                     },
                                     "phone": {
                                         "type": "string",
@@ -121,14 +121,14 @@
                                             "type": "string",
                                             "example": "User registered successfully"
                                         },
+                                        "token": {
+                                            "type": "string",
+                                            "example": "1|abcxyztoken"
+                                        },
                                         "data": {
                                             "properties": {
                                                 "user": {
                                                     "properties": {
-                                                        "user_id": {
-                                                            "type": "integer",
-                                                            "example": 10
-                                                        },
                                                         "full_name": {
                                                             "type": "string",
                                                             "example": "Ahmed Hassan"
@@ -146,15 +146,8 @@
                                                         "role": {
                                                             "type": "string",
                                                             "example": "PATIENT"
-                                                        },
-                                                        "created_at": {
-                                                            "type": "string",
-                                                            "format": "date-time"
                                                         }
                                                     },
-                                                    "type": "object"
-                                                },
-                                                "profile": {
                                                     "type": "object"
                                                 }
                                             },
@@ -165,6 +158,97 @@
                                 }
                             }
                         }
+                    },
+                    "422": {
+                        "description": "Validation error / user already exists"
+                    }
+                }
+            }
+        },
+        "/api/login": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Login user",
+                "operationId": "loginUser",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "ahmed@example.com"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "example": "secret123"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Login successful",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Login successful"
+                                        },
+                                        "token": {
+                                            "type": "string",
+                                            "example": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "user": {
+                                                    "properties": {
+                                                        "full_name": {
+                                                            "type": "string",
+                                                            "example": "Ahmed Hassan"
+                                                        },
+                                                        "email": {
+                                                            "type": "string",
+                                                            "format": "email",
+                                                            "example": "ahmed@example.com"
+                                                        },
+                                                        "phone": {
+                                                            "type": "string",
+                                                            "example": "01012345678",
+                                                            "nullable": true
+                                                        },
+                                                        "role": {
+                                                            "type": "string",
+                                                            "example": "PATIENT"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid credentials"
                     },
                     "422": {
                         "description": "Validation error"
