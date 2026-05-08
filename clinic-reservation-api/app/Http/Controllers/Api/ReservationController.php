@@ -10,7 +10,9 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 use Throwable;
 
@@ -44,8 +46,13 @@ class ReservationController extends Controller
     )]
     public function store(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'doctor_id' => ['required', 'integer', 'exists:doctors,id'],
+        $requestData = $request->all();
+        $requestData['reservation_date'] = $requestData['reservation_date']
+            ?? $requestData['appointment_date']
+            ?? null;
+
+        $validator = Validator::make($requestData, [
+            'doctor_id' => ['required', 'integer', Rule::exists('doctors', Doctor::keyColumn())],
             'reservation_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             'time_slot' => ['required', 'string', 'max:20'],
             'patient_name' => ['required', 'string', 'max:150'],
@@ -82,13 +89,29 @@ class ReservationController extends Controller
             ], 409);
         }
 
-        $doctor = Doctor::query()->findOrFail($payload['doctor_id']);
-        $hasActiveReservation = Reservation::query()
-            ->where('doctor_id', $doctor->id)
-            ->whereDate('reservation_date', $payload['reservation_date'])
-            ->where('time_slot', $payload['time_slot'])
-            ->where('status', '!=', 'cancelled')
-            ->exists();
+        $doctor = Doctor::query()
+            ->with('user')
+            ->find($payload['doctor_id']);
+
+        if (! $doctor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Selected doctor was not found.',
+                'data' => [],
+            ], 422);
+        }
+
+        $reservationDateColumn = Reservation::dateColumn();
+        $activeReservationQuery = Reservation::query()
+            ->where('doctor_id', $doctor->doctor_id)
+            ->whereDate($reservationDateColumn, $payload['reservation_date'])
+            ->where('time_slot', $payload['time_slot']);
+
+        if ($this->reservationHasColumn('status')) {
+            $activeReservationQuery->where('status', '!=', 'cancelled');
+        }
+
+        $hasActiveReservation = $activeReservationQuery->exists();
 
         if ($hasActiveReservation) {
             return response()->json([
@@ -98,29 +121,19 @@ class ReservationController extends Controller
             ], 409);
         }
 
-        $reservation = DB::transaction(function () use ($payload, $doctor): Reservation {
-            return Reservation::query()->create([
-                'reservation_code' => $this->generateReservationCode($payload['reservation_date']),
-                'patient_id' => $this->resolvePatientId(),
-                'doctor_id' => $doctor->id,
-                'reservation_date' => $payload['reservation_date'],
-                'time_slot' => $payload['time_slot'],
-                'status' => 'confirmed',
-                'patient_name' => $payload['patient_name'],
-                'patient_email' => $payload['patient_email'],
-                'patient_phone' => $payload['patient_phone'],
-                'notes' => $payload['notes'] ?? null,
-                'consultation_fee' => $doctor->consultation_fee ?? 150,
-                'processing_fee' => 5,
-                'location' => $doctor->location,
-            ]);
+        $reservation = DB::transaction(function () use ($payload, $doctor, $reservationDateColumn): Reservation {
+            return Reservation::query()->create($this->reservationPayload(
+                $payload,
+                $doctor,
+                $reservationDateColumn
+            ));
         });
 
         return response()->json([
             'success' => true,
             'message' => 'Appointment confirmed successfully.',
             'data' => [
-                'reservation' => $this->formatReservation($reservation->fresh('doctor')),
+                'reservation' => $this->formatReservation($reservation->fresh('doctor.user')),
             ],
         ], 201);
     }
@@ -140,24 +153,68 @@ class ReservationController extends Controller
         return optional($user->patient)->patient_id;
     }
 
+    private function reservationPayload(array $payload, Doctor $doctor, string $reservationDateColumn): array
+    {
+        $data = [
+            'patient_id' => $this->resolvePatientId(),
+            'doctor_id' => $doctor->doctor_id,
+            $reservationDateColumn => $payload['reservation_date'],
+            'time_slot' => $payload['time_slot'],
+        ];
+
+        $optionalData = [
+            'reservation_code' => $this->generateReservationCode($payload['reservation_date']),
+            'status' => 'confirmed',
+            'patient_name' => $payload['patient_name'],
+            'patient_email' => $payload['patient_email'],
+            'patient_phone' => $payload['patient_phone'],
+            'notes' => $payload['notes'] ?? null,
+            'consultation_fee' => $doctor->consultationFeeForBooking(),
+            'processing_fee' => 5,
+            'location' => $doctor->locationForBooking(),
+        ];
+
+        if ($reservationDateColumn !== 'appointment_date' && $this->reservationHasColumn('appointment_date')) {
+            $optionalData['appointment_date'] = $payload['reservation_date'];
+        }
+
+        if ($reservationDateColumn !== 'reservation_date' && $this->reservationHasColumn('reservation_date')) {
+            $optionalData['reservation_date'] = $payload['reservation_date'];
+        }
+
+        if ($this->reservationHasColumn('session_details')) {
+            $optionalData['session_details'] = $payload['notes'] ?? 'Patient booking through ClinicReserve.';
+        }
+
+        foreach ($optionalData as $column => $value) {
+            if ($this->reservationHasColumn($column)) {
+                $data[$column] = $value;
+            }
+        }
+
+        return $data;
+    }
+
     private function generateReservationCode(string $date): string
     {
         $prefix = 'RES-'.Carbon::parse($date)->format('Ymd').'-';
 
         do {
             $code = $prefix.random_int(1000, 9999);
-        } while (Reservation::query()->where('reservation_code', $code)->exists());
+        } while ($this->reservationHasColumn('reservation_code') && Reservation::query()->where('reservation_code', $code)->exists());
 
         return $code;
     }
 
     private function formatReservation(Reservation $reservation): array
     {
-        $consultationFee = (float) ($reservation->consultation_fee ?? 0);
-        $processingFee = (float) ($reservation->processing_fee ?? 0);
+        $doctor = $reservation->doctor;
+        $date = $reservation->appointmentDateForApi();
+        $consultationFee = (float) ($reservation->consultation_fee ?? optional($doctor)->consultationFeeForBooking() ?? 150);
+        $processingFee = (float) ($reservation->processing_fee ?? 5);
 
         return [
-            'id' => $reservation->id,
+            'id' => $reservation->reservation_id,
             'reservation_id' => $reservation->reservation_id,
             'reservation_code' => $reservation->reservation_code,
             'patient_id' => $reservation->patient_id,
@@ -165,15 +222,25 @@ class ReservationController extends Controller
             'patient_email' => $reservation->patient_email,
             'patient_phone' => $reservation->patient_phone,
             'doctor_id' => $reservation->doctor_id,
-            'doctor_name' => optional($reservation->doctor)->name ?: optional(optional($reservation->doctor)->user)->full_name,
-            'reservation_date' => optional($reservation->reservation_date)->format('Y-m-d'),
+            'doctor_name' => optional($doctor)->display_name,
+            'appointment_date' => $date,
+            'reservation_date' => $date,
             'time_slot' => $reservation->time_slot,
-            'status' => $reservation->status,
+            'status' => $reservation->status ?? 'confirmed',
             'notes' => $reservation->notes,
-            'location' => $reservation->location,
+            'location' => $reservation->location ?: optional($doctor)->locationForBooking(),
             'consultation_fee' => $consultationFee,
             'processing_fee' => $processingFee,
             'total_estimated' => $consultationFee + $processingFee,
         ];
+    }
+
+    private function reservationHasColumn(string $column): bool
+    {
+        try {
+            return Schema::hasColumn('reservations', $column);
+        } catch (Throwable) {
+            return false;
+        }
     }
 }
