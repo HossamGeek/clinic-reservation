@@ -74,7 +74,6 @@
     font-size: clamp(8px, 0.95vw, 12px);
 }
 
-.new-appointment-button,
 .confirm-button {
     border: 0;
     background: var(--booking-blue);
@@ -85,26 +84,10 @@
     transition: background 0.15s ease, transform 0.15s ease;
 }
 
-.new-appointment-button {
-    height: clamp(25px, 3vw, 42px);
-    margin: clamp(11px, 1.7vw, 18px) clamp(4px, 0.6vw, 6px) clamp(17px, 1.9vw, 22px);
-    font-size: clamp(8px, 0.95vw, 13px);
-    white-space: nowrap;
-}
-
-.new-appointment-button span {
-    display: inline-block;
-    font-size: 1.2em;
-    line-height: 1;
-    margin-right: 3px;
-}
-
-.new-appointment-button:hover,
 .confirm-button:hover:not(:disabled) {
     background: var(--booking-blue-hover);
 }
 
-.new-appointment-button:active,
 .confirm-button:active:not(:disabled) {
     transform: translateY(1px);
 }

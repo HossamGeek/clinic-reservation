@@ -20,8 +20,6 @@
                     <span>Provider Portal</span>
                 </div>
 
-                <button class="new-appointment-button" type="button"><span aria-hidden="true">+</span> New Appointment</button>
-
                 <nav class="sidebar-nav">
                     <a href="#" class="sidebar-link">
                         <span class="sidebar-icon sidebar-figma-icon" aria-hidden="true">
