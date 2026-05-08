@@ -8,24 +8,27 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Reservation extends Model
 {
     protected $table = 'reservations';
-    protected $primaryKey = 'reservation_id';
-    public $timestamps = false;
 
     protected $fillable = [
         'reservation_code',
         'patient_id',
         'doctor_id',
-        'appointment_date',
+        'reservation_date',
         'time_slot',
-        'session_details',
-        'prescription_info',
         'status',
-        'created_at',
+        'patient_name',
+        'patient_email',
+        'patient_phone',
+        'notes',
+        'consultation_fee',
+        'processing_fee',
+        'location',
     ];
 
     protected $casts = [
-        'appointment_date' => 'date',
-        'created_at' => 'datetime',
+        'reservation_date' => 'date',
+        'consultation_fee' => 'decimal:2',
+        'processing_fee' => 'decimal:2',
     ];
 
     public function patient(): BelongsTo
@@ -35,6 +38,11 @@ class Reservation extends Model
 
     public function doctor(): BelongsTo
     {
-        return $this->belongsTo(Doctor::class, 'doctor_id', 'doctor_id');
+        return $this->belongsTo(Doctor::class, 'doctor_id', 'id');
+    }
+
+    public function getReservationIdAttribute(mixed $value): mixed
+    {
+        return $value ?? $this->attributes['id'] ?? null;
     }
 }

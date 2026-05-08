@@ -9,21 +9,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Doctor extends Model
 {
     protected $table = 'doctors';
-    protected $primaryKey = 'doctor_id';
-    public $timestamps = false;
 
     protected $fillable = [
         'user_id',
+        'name',
         'specialty',
+        'bio',
         'rating',
         'available_time',
-        'bio',
-        'created_at',
+        'location',
+        'image',
+        'consultation_fee',
     ];
 
     protected $casts = [
         'rating' => 'decimal:1',
-        'created_at' => 'datetime',
+        'consultation_fee' => 'decimal:2',
     ];
 
     public function user(): BelongsTo
@@ -33,6 +34,11 @@ class Doctor extends Model
 
     public function reservations(): HasMany
     {
-        return $this->hasMany(Reservation::class, 'doctor_id', 'doctor_id');
+        return $this->hasMany(Reservation::class, 'doctor_id', 'id');
+    }
+
+    public function getDoctorIdAttribute(mixed $value): mixed
+    {
+        return $value ?? $this->attributes['id'] ?? null;
     }
 }
