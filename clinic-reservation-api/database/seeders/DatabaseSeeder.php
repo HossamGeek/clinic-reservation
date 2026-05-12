@@ -36,6 +36,8 @@ class DatabaseSeeder extends Seeder
                 'available_time' => 'Mon-Fri, 09:00 AM - 04:00 PM',
                 'location' => 'Main City Hospital, Building A, Suite 302',
                 'consultation_fee' => 150,
+                'reviews_count' => 120,
+                'accepts_new_patients' => true,
             ]);
 
             if ($hadDoctors) {
@@ -52,6 +54,8 @@ class DatabaseSeeder extends Seeder
                 'available_time' => 'Sun-Thu, 10:00 AM - 03:00 PM',
                 'location' => 'ClinicReserve Medical Center, Floor 2',
                 'consultation_fee' => 130,
+                'reviews_count' => 86,
+                'accepts_new_patients' => true,
             ]);
 
             $this->seedDoctor([
@@ -64,6 +68,8 @@ class DatabaseSeeder extends Seeder
                 'available_time' => 'Mon-Wed, 09:00 AM - 02:30 PM',
                 'location' => 'Family Care Wing, Room 118',
                 'consultation_fee' => 120,
+                'reviews_count' => 94,
+                'accepts_new_patients' => true,
             ]);
         });
     }
@@ -166,6 +172,8 @@ class DatabaseSeeder extends Seeder
             'location' => $profile['location'],
             'image' => null,
             'consultation_fee' => $profile['consultation_fee'],
+            'reviews_count' => $profile['reviews_count'],
+            'accepts_new_patients' => $profile['accepts_new_patients'],
             'created_at' => now(),
             'updated_at' => now(),
         ];

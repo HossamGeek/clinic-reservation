@@ -25,6 +25,8 @@ class Doctor extends Model
         'location',
         'image',
         'consultation_fee',
+        'reviews_count',
+        'accepts_new_patients',
         'created_at',
         'updated_at',
     ];
@@ -32,6 +34,8 @@ class Doctor extends Model
     protected $casts = [
         'rating' => 'decimal:1',
         'consultation_fee' => 'decimal:2',
+        'reviews_count' => 'integer',
+        'accepts_new_patients' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
