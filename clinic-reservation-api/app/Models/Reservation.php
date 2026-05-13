@@ -31,7 +31,11 @@ class Reservation extends Model
         'processing_fee',
         'location',
         'session_details',
+        'chief_complaint',
+        'objective_observations',
+        'assessment_plan',
         'prescription_info',
+        'completed_at',
         'created_at',
         'updated_at',
     ];
@@ -41,6 +45,8 @@ class Reservation extends Model
         'reservation_date' => 'date',
         'consultation_fee' => 'decimal:2',
         'processing_fee' => 'decimal:2',
+        'prescription_info' => 'array',
+        'completed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
