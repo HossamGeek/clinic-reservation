@@ -1,0 +1,157 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinic Management - Refined Design</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-hospital-symbol logo-icon"></i>
+                <div class="logo-text">
+                    <strong>Clinic Management</strong>
+                    <span>Provider Portal</span>
+                </div>
+            </div>
+            
+            <button class="btn-new-appointment">+ New Appointment</button>
+            
+            <nav class="sidebar-nav">
+                <ul>
+                    <li><i class="fas fa-th-large"></i> <span>Dashboard</span></li>
+                    <li><i class="fas fa-calendar-alt"></i> <span>Reservations</span></li>
+                    <li class="active"><i class="fas fa-user-md"></i> <span>Doctors</span></li>
+                    <li><i class="fas fa-clock"></i> <span>Schedule</span></li>
+                    <li><i class="fas fa-file-medical"></i> <span>Records</span></li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="footer-item"><i class="fas fa-question-circle"></i> <span>Help Center</span></div>
+                <div class="footer-item"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <div class="header-left">
+                    <i class="fas fa-bars menu-toggle" id="menuToggle"></i>
+                    <span class="brand">ClinicReserve</span>
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Quick search...">
+                    </div>
+                </div>
+                <div class="header-right">
+                    <i class="far fa-bell icon-btn"></i>
+                    <i class="fas fa-cog icon-btn"></i>
+                    <button class="btn-logout-top">Logout</button>
+                    <img src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100" class="admin-avatar">
+                </div>
+            </header>
+
+            <section class="find-specialist">
+                <h1>Find a Specialist</h1>
+                <p class="subtitle">Search our network of verified healthcare professionals.</p>
+                
+                <!-- عناصر البحث المفصلة تماماً -->
+                <div class="search-controls-container">
+                    <div class="search-input-wrapper">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="doctorSearchInput" placeholder="Search by doctor name or keywords">
+                    </div>
+
+                    <div class="search-select-wrapper">
+                        <i class="fas fa-stethoscope"></i>
+                        <select id="specialtyFilter">
+                            <option value="all">Any Specialty</option>
+                            <option value="Cardiologist">Cardiologist</option>
+                            <option value="Neurologist">Neurologist</option>
+                            <option value="Pediatrician">Pediatrician</option>
+                        </select>
+                    </div>
+
+                    <button class="btn-search-standalone" onclick="performSearch()">Search Doctors</button>
+                </div>
+
+                <div class="filter-pills">
+                    <button class="pill">Available Today</button>
+                    <button class="pill active">Accepts New Patients</button>
+                    <button class="pill">Telehealth</button>
+                </div>
+            </section>
+
+            <section class="doctors-grid" id="doctorsGrid">
+                <!-- Card 1 -->
+                <div class="doctor-card" data-name="Sarah Jenkins" data-specialty="Cardiologist">
+                    <div class="card-top">
+                        <!-- صورة جديدة ومستقرة للدكتورة سارة -->
+                        <img src="https://images.pexels.com/photos/4173251/pexels-photo-4173251.jpeg?auto=compress&cs=tinysrgb&w=150" class="doc-img">
+                        <div class="doc-details">
+                            <h3>Dr. Sarah Jenkins</h3>
+                            <span class="spec"><i class="fas fa-heartbeat"></i> Cardiologist</span>
+                            <div class="stars">⭐⭐⭐⭐⭐ <span>4.8 (124 reviews)</span></div>
+                        </div>
+                    </div>
+                    <div class="next-avail">
+                        <i class="far fa-clock"></i> Next Available: <strong>Tomorrow, 9:00 AM</strong>
+                    </div>
+                    <button class="btn-book-now" onclick="openBookingModal('Dr. Sarah Jenkins')">Book Now</button>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="doctor-card" data-name="Michael Chen" data-specialty="Neurologist">
+                    <div class="card-top">
+                        <img src="https://images.pexels.com/photos/4173239/pexels-photo-4173239.jpeg?auto=compress&cs=tinysrgb&w=150" class="doc-img">
+                        <div class="doc-details">
+                            <h3>Dr. Michael Chen</h3>
+                            <span class="spec"><i class="fas fa-brain"></i> Neurologist</span>
+                            <div class="stars">⭐⭐⭐⭐⭐ <span>5.0 (89 reviews)</span></div>
+                        </div>
+                    </div>
+                    <div class="next-avail">
+                        <i class="far fa-clock"></i> Next Available: <strong>Today, 2:30 PM</strong>
+                    </div>
+                    <button class="btn-book-now" onclick="openBookingModal('Dr. Michael Chen')">Book Now</button>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="doctor-card" data-name="Emily Rodriguez" data-specialty="Pediatrician">
+                    <div class="card-top">
+                        <img src="https://images.pexels.com/photos/4173256/pexels-photo-4173256.jpeg?auto=compress&cs=tinysrgb&w=150" class="doc-img">
+                        <div class="doc-details">
+                            <h3>Dr. Emily Rodriguez</h3>
+                            <span class="spec"><i class="fas fa-baby"></i> Pediatrician</span>
+                            <div class="stars">⭐⭐⭐⭐ <span>4.2 (210 reviews)</span></div>
+                        </div>
+                    </div>
+                    <div class="next-avail">
+                        <i class="far fa-clock"></i> Next Available: <strong>Thu, Oct 26, 10:00 AM</strong>
+                    </div>
+                    <button class="btn-book-now" onclick="openBookingModal('Dr. Emily Rodriguez')">Book Now</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal -->
+    <div id="bookingModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeBookingModal()">&times;</span>
+            <h2 id="modalDoctorName"></h2>
+            <p>Confirm your appointment booking?</p>
+            <button class="btn-confirm" onclick="confirmBooking()">Confirm Appointment</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
