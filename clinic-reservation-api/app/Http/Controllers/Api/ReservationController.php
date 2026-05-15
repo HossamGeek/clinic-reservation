@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ReservationConsultationResource;
 use App\Models\Doctor;
+use App\Models\Patient;
 use App\Models\Reservation;
 use App\Support\BookingSlots;
 use Carbon\Carbon;
@@ -18,6 +20,189 @@ use Throwable;
 
 class ReservationController extends Controller
 {
+    public function activeConsultation(Request $request): JsonResponse
+    {
+        $patientId = $request->integer('patient_id') ?: null;
+        $doctorId = $request->integer('doctor_id') ?: null;
+        $patient = $patientId ? $this->patientForId($patientId) : null;
+        $doctor = $doctorId ? $this->doctorForId($doctorId) : null;
+
+        if ($patientId && ! $patient) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Patient profile was not found.',
+                'data' => [],
+            ], 404);
+        }
+
+        if ($doctorId && ! $doctor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Doctor profile was not found.',
+                'data' => [],
+            ], 404);
+        }
+
+        $reservation = $this->consultationQuery()
+            ->when($patient, fn ($query, Patient $patient) => $query->where('patient_id', $patient->patient_id))
+            ->when($doctor, fn ($query, Doctor $doctor) => $query->where('doctor_id', $doctor->doctor_id))
+            ->when($this->reservationHasColumn('status'), function ($query): void {
+                $query->where(function ($statusQuery): void {
+                    $statusQuery->whereIn('status', ['in_progress', 'confirmed', 'Confirmed', 'pending', 'Pending'])
+                        ->orWhereNull('status');
+                });
+            })
+            ->when($this->reservationHasColumn('status'), fn ($query) => $query->orderByRaw("case when status = 'in_progress' then 0 else 1 end"))
+            ->orderBy(Reservation::dateColumn())
+            ->orderBy('time_slot')
+            ->first();
+
+        if (! $reservation) {
+            $reservation = $this->ensureActiveConsultation($patient, $doctor);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Active consultation retrieved successfully.',
+            'data' => [
+                'consultation' => new ReservationConsultationResource($reservation->loadMissing(['doctor.user', 'patient.user', 'patient.reservations'])),
+            ],
+        ]);
+    }
+
+    public function createActiveConsultation(Request $request): JsonResponse
+    {
+        $patientId = $request->integer('patient_id') ?: null;
+        $doctorId = $request->integer('doctor_id') ?: null;
+        $patient = $patientId ? $this->patientForId($patientId) : null;
+        $doctor = $doctorId ? $this->doctorForId($doctorId) : null;
+
+        if ($patientId && ! $patient) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Patient profile was not found.',
+                'data' => [],
+            ], 404);
+        }
+
+        if ($doctorId && ! $doctor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Doctor profile was not found.',
+                'data' => [],
+            ], 404);
+        }
+
+        $reservation = $this->ensureActiveConsultation($patient, $doctor);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'New consultation record created.',
+            'data' => [
+                'consultation' => new ReservationConsultationResource($reservation->loadMissing(['doctor.user', 'patient.user', 'patient.reservations'])),
+            ],
+        ], 201);
+    }
+
+    public function showConsultation(int $id): JsonResponse
+    {
+        $reservation = $this->consultationQuery()->find($id);
+
+        if (! $reservation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Consultation reservation not found.',
+                'data' => [],
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consultation retrieved successfully.',
+            'data' => [
+                'consultation' => new ReservationConsultationResource($reservation),
+            ],
+        ]);
+    }
+
+    public function updateConsultation(Request $request, int $id): JsonResponse
+    {
+        $reservation = $this->consultationQuery()->find($id);
+
+        if (! $reservation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Consultation reservation not found.',
+                'data' => [],
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), $this->consultationRules());
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please review the consultation details.',
+                'data' => [
+                    'errors' => $validator->errors(),
+                ],
+            ], 422);
+        }
+
+        $payload = $this->consultationPayload($validator->validated(), false);
+
+        if ($this->reservationHasColumn('status') && $reservation->status !== 'completed') {
+            $payload['status'] = $this->databaseStatus('in_progress');
+        }
+
+        $reservation->fill($payload);
+        $reservation->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consultation records saved successfully.',
+            'data' => [
+                'consultation' => new ReservationConsultationResource($reservation->fresh(['doctor.user', 'patient.user', 'patient.reservations'])),
+            ],
+        ]);
+    }
+
+    public function completeConsultation(Request $request, int $id): JsonResponse
+    {
+        $reservation = $this->consultationQuery()->find($id);
+
+        if (! $reservation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Consultation reservation not found.',
+                'data' => [],
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), $this->consultationRules());
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please review the consultation details.',
+                'data' => [
+                    'errors' => $validator->errors(),
+                ],
+            ], 422);
+        }
+
+        $reservation->fill($this->consultationPayload($validator->validated(), true));
+        $reservation->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consultation marked as complete.',
+            'data' => [
+                'consultation' => new ReservationConsultationResource($reservation->fresh(['doctor.user', 'patient.user', 'patient.reservations'])),
+            ],
+        ]);
+    }
+
     #[OA\Post(
         path: '/api/reservations',
         operationId: 'createReservation',
@@ -164,7 +349,7 @@ class ReservationController extends Controller
 
         $optionalData = [
             'reservation_code' => $this->generateReservationCode($payload['reservation_date']),
-            'status' => 'confirmed',
+            'status' => $this->databaseStatus('confirmed'),
             'patient_name' => $payload['patient_name'],
             'patient_email' => $payload['patient_email'],
             'patient_phone' => $payload['patient_phone'],
@@ -184,6 +369,20 @@ class ReservationController extends Controller
 
         if ($this->reservationHasColumn('session_details')) {
             $optionalData['session_details'] = $payload['notes'] ?? 'Patient booking through ClinicReserve.';
+        }
+
+        if ($this->reservationHasColumn('prescription_info')) {
+            $optionalData['prescription_info'] = [
+                'medications' => [[
+                    'medication_name' => '',
+                    'dosage' => '',
+                    'frequency' => 'Once daily',
+                ]],
+                'medication_name' => '',
+                'dosage' => '',
+                'frequency' => 'Once daily',
+                'pharmacy_instructions' => '',
+            ];
         }
 
         foreach ($optionalData as $column => $value) {
@@ -241,6 +440,257 @@ class ReservationController extends Controller
             return Schema::hasColumn('reservations', $column);
         } catch (Throwable) {
             return false;
+        }
+    }
+
+    private function consultationQuery()
+    {
+        return Reservation::query()->with(['doctor.user', 'patient.user', 'patient.reservations']);
+    }
+
+    private function consultationRules(): array
+    {
+        return [
+            'chief_complaint' => ['nullable', 'string', 'max:4000'],
+            'objective_observations' => ['nullable', 'string', 'max:4000'],
+            'assessment_plan' => ['nullable', 'string', 'max:4000'],
+            'prescription.medication_name' => ['nullable', 'string', 'max:150'],
+            'prescription.dosage' => ['nullable', 'string', 'max:80'],
+            'prescription.frequency' => ['nullable', 'string', 'max:80'],
+            'prescription.pharmacy_instructions' => ['nullable', 'string', 'max:1000'],
+            'prescription.medications' => ['nullable', 'array', 'max:20'],
+            'prescription.medications.*.medication_name' => ['nullable', 'string', 'max:150'],
+            'prescription.medications.*.dosage' => ['nullable', 'string', 'max:80'],
+            'prescription.medications.*.frequency' => ['nullable', 'string', 'max:80'],
+        ];
+    }
+
+    private function consultationPayload(array $data, bool $complete): array
+    {
+        $payload = [];
+
+        foreach (['chief_complaint', 'objective_observations', 'assessment_plan'] as $column) {
+            if ($this->reservationHasColumn($column) && array_key_exists($column, $data)) {
+                $payload[$column] = $data[$column];
+            }
+        }
+
+        if ($this->reservationHasColumn('prescription_info') && array_key_exists('prescription', $data)) {
+            $payload['prescription_info'] = $this->prescriptionPayload($data['prescription']);
+        }
+
+        if ($complete) {
+            if ($this->reservationHasColumn('status')) {
+                $payload['status'] = $this->databaseStatus('completed');
+            }
+
+            if ($this->reservationHasColumn('completed_at')) {
+                $payload['completed_at'] = now();
+            }
+        }
+
+        return $payload;
+    }
+
+    private function prescriptionPayload(array $prescription): array
+    {
+        $medications = collect($prescription['medications'] ?? [])
+            ->map(fn (array $medication): array => [
+                'medication_name' => trim((string) ($medication['medication_name'] ?? '')),
+                'dosage' => trim((string) ($medication['dosage'] ?? '')),
+                'frequency' => trim((string) ($medication['frequency'] ?? 'Once daily')) ?: 'Once daily',
+            ])
+            ->filter(fn (array $medication): bool => $medication['medication_name'] !== '' || $medication['dosage'] !== '')
+            ->values()
+            ->all();
+
+        if (! $medications) {
+            $medications = [[
+                'medication_name' => trim((string) ($prescription['medication_name'] ?? '')),
+                'dosage' => trim((string) ($prescription['dosage'] ?? '')),
+                'frequency' => trim((string) ($prescription['frequency'] ?? 'Once daily')) ?: 'Once daily',
+            ]];
+        }
+
+        return [
+            'medications' => $medications,
+            'medication_name' => $medications[0]['medication_name'] ?? '',
+            'dosage' => $medications[0]['dosage'] ?? '',
+            'frequency' => $medications[0]['frequency'] ?? 'Once daily',
+            'pharmacy_instructions' => trim((string) ($prescription['pharmacy_instructions'] ?? '')),
+        ];
+    }
+
+    private function ensureActiveConsultation(?Patient $patient = null, ?Doctor $doctor = null): Reservation
+    {
+        $doctor ??= $this->defaultConsultationDoctor();
+        $dateColumn = Reservation::dateColumn();
+        $date = now()->toDateString();
+        $patientUser = $patient?->relationLoaded('user') ? $patient->user : $patient?->user;
+        $payload = [
+            'patient_id' => $patient?->patient_id,
+            'doctor_id' => $doctor->doctor_id,
+            $dateColumn => $date,
+            'time_slot' => '10:30 AM',
+        ];
+
+        $optionalData = [
+            'reservation_code' => $this->generateReservationCode($date),
+            'status' => $this->databaseStatus('in_progress'),
+            'patient_name' => $patientUser?->full_name ?: 'Eleanor Vance',
+            'patient_email' => $patientUser?->email ?: 'eleanor.vance@example.test',
+            'patient_phone' => $patientUser?->phone ?: '+1 (555) 0189',
+            'notes' => 'Active consultation created from provider workspace.',
+            'consultation_fee' => $doctor->consultationFeeForBooking(),
+            'processing_fee' => 5,
+            'location' => $doctor->locationForBooking(),
+            'chief_complaint' => '',
+            'objective_observations' => '',
+            'assessment_plan' => '',
+            'prescription_info' => [
+                'medications' => [[
+                    'medication_name' => '',
+                    'dosage' => '',
+                    'frequency' => 'Once daily',
+                ]],
+                'medication_name' => '',
+                'dosage' => '',
+                'frequency' => 'Once daily',
+                'pharmacy_instructions' => '',
+            ],
+        ];
+
+        if ($dateColumn !== 'appointment_date' && $this->reservationHasColumn('appointment_date')) {
+            $optionalData['appointment_date'] = $date;
+        }
+
+        if ($dateColumn !== 'reservation_date' && $this->reservationHasColumn('reservation_date')) {
+            $optionalData['reservation_date'] = $date;
+        }
+
+        foreach ($optionalData as $column => $value) {
+            if ($this->reservationHasColumn($column)) {
+                $payload[$column] = $value;
+            }
+        }
+
+        return Reservation::query()->create($payload);
+    }
+
+    private function patientForId(int $patientId): ?Patient
+    {
+        try {
+            if (! Schema::hasTable('patients')) {
+                return null;
+            }
+
+            return Patient::query()
+                ->with('user')
+                ->find($patientId);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function doctorForId(int $doctorId): ?Doctor
+    {
+        try {
+            if (! Schema::hasTable('doctors')) {
+                return null;
+            }
+
+            return Doctor::query()
+                ->with('user')
+                ->find($doctorId);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function defaultConsultationDoctor(): Doctor
+    {
+        $doctor = $this->doctorHasColumn('name')
+            ? Doctor::query()->where('name', 'Dr. Sarah Jenkins')->first()
+            : null;
+
+        if ($doctor) {
+            return $doctor;
+        }
+
+        $doctor = Doctor::query()->first();
+
+        if ($doctor) {
+            return $doctor;
+        }
+
+        $availableColumns = array_flip(Schema::getColumnListing('doctors'));
+        $data = [
+            'name' => 'Dr. Sarah Jenkins',
+            'specialty' => 'Cardiology',
+            'bio' => 'Board-certified provider focused on preventive cardiology and consultation care.',
+            'rating' => 4.9,
+            'available_time' => 'Mon-Fri, 09:00 AM - 04:00 PM',
+            'location' => 'Main City Hospital, Building A, Suite 302',
+            'consultation_fee' => 150,
+            'reviews_count' => 120,
+            'accepts_new_patients' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        return Doctor::query()->create(array_intersect_key($data, $availableColumns));
+    }
+
+    private function doctorHasColumn(string $column): bool
+    {
+        try {
+            return Schema::hasColumn('doctors', $column);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function databaseStatus(string $desired): string
+    {
+        $allowed = $this->reservationStatusValues();
+
+        if (! $allowed || in_array($desired, $allowed, true)) {
+            return $desired;
+        }
+
+        $fallbacks = match ($desired) {
+            'in_progress' => ['confirmed', 'Confirmed', 'pending', 'Pending'],
+            'completed' => ['completed', 'Completed', 'done', 'Done', 'confirmed', 'Confirmed'],
+            default => ['confirmed', 'Confirmed', 'pending', 'Pending'],
+        };
+
+        foreach ($fallbacks as $fallback) {
+            if (in_array($fallback, $allowed, true)) {
+                return $fallback;
+            }
+        }
+
+        return $allowed[0];
+    }
+
+    private function reservationStatusValues(): array
+    {
+        try {
+            $column = DB::selectOne("SHOW COLUMNS FROM reservations LIKE 'status'");
+            $type = $column->Type ?? $column->type ?? null;
+
+            if (! is_string($type) || ! str_starts_with($type, 'enum(')) {
+                return [];
+            }
+
+            preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", $type, $matches);
+
+            return array_map(
+                fn (string $value): string => stripslashes($value),
+                $matches[1] ?? []
+            );
+        } catch (Throwable) {
+            return [];
         }
     }
 }

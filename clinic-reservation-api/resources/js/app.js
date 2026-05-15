@@ -527,3 +527,424 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 });
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.body.dataset.page !== 'provider-consultation') {
+        return;
+    }
+
+    const state = {
+        consultation: null,
+        medications: [],
+        saving: false,
+    };
+
+    const els = {
+        meta: document.getElementById('consultation-meta'),
+        status: document.getElementById('consultation-status'),
+        feedback: document.getElementById('consultation-feedback'),
+        patientAvatar: document.getElementById('patient-avatar'),
+        patientName: document.getElementById('patient-name'),
+        patientDemographics: document.getElementById('patient-demographics'),
+        patientRecord: document.getElementById('patient-record'),
+        vitalBlood: document.getElementById('vital-blood'),
+        vitalWeight: document.getElementById('vital-weight'),
+        vitalBp: document.getElementById('vital-bp'),
+        allergyList: document.getElementById('allergy-list'),
+        historyList: document.getElementById('history-list'),
+        form: document.getElementById('consultation-form'),
+        chiefComplaint: document.getElementById('chief-complaint'),
+        objectiveObservations: document.getElementById('objective-observations'),
+        assessmentPlan: document.getElementById('assessment-plan'),
+        medicationList: document.getElementById('medication-list'),
+        pharmacyInstructions: document.getElementById('pharmacy-instructions'),
+        saveRecords: document.getElementById('save-records'),
+        completeSession: document.getElementById('complete-session'),
+        addMedication: document.getElementById('add-medication'),
+        newConsultationRecord: document.getElementById('new-consultation-record'),
+    };
+
+    els.form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        saveConsultation(false);
+    });
+
+    els.completeSession.addEventListener('click', () => saveConsultation(true));
+    els.newConsultationRecord.addEventListener('click', () => createNewConsultationRecord());
+    els.addMedication.addEventListener('click', () => {
+        state.medications.push(blankMedication());
+        renderMedicationRows();
+        const rows = els.medicationList.querySelectorAll('.prescription-grid');
+        rows[rows.length - 1]?.querySelector('input')?.focus();
+    });
+
+    document.querySelectorAll('[data-absolute-href]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+            event.preventDefault();
+            window.location.assign(link.dataset.absoluteHref);
+        });
+    });
+
+    loadConsultation();
+
+    async function loadConsultation() {
+        try {
+            const params = new URLSearchParams();
+
+            if (document.body.dataset.patientId) {
+                params.set('patient_id', document.body.dataset.patientId);
+            }
+
+            if (document.body.dataset.doctorId) {
+                params.set('doctor_id', document.body.dataset.doctorId);
+            }
+
+            const endpoint = `/api/reservations/active-consultation${params.toString() ? `?${params}` : ''}`;
+            const response = await apiRequest(endpoint);
+            state.consultation = response.data?.consultation;
+            renderConsultation();
+        } catch (error) {
+            showFeedback('warning', error.message || 'Unable to load the active consultation.');
+        }
+    }
+
+    function renderConsultation() {
+        const consultation = state.consultation;
+        const patient = consultation.patient;
+        const notes = consultation.clinical_notes || {};
+        const prescription = consultation.prescription || {};
+
+        els.meta.textContent = `${consultation.header_time} — ${consultation.doctor_name}`;
+        els.status.textContent = consultation.status === 'completed' ? 'Session Complete' : 'Session In Progress';
+        els.patientName.textContent = patient.name;
+        els.patientDemographics.textContent = `DOB: ${formatDob(patient.date_of_birth)} (${patient.age}y) • ${patient.gender?.slice(0, 1) || 'F'}`;
+        els.patientRecord.textContent = `ID: ${patient.record_number}`;
+        els.vitalBlood.textContent = patient.vitals?.blood_type || 'A+';
+        els.vitalWeight.textContent = patient.vitals?.weight || '68 kg';
+        els.vitalBp.textContent = patient.vitals?.blood_pressure || '118/76';
+        renderAvatar(patient);
+        renderAllergies(patient.allergies || []);
+        renderHistory(patient.medical_history || []);
+
+        els.chiefComplaint.value = notes.chief_complaint || '';
+        els.objectiveObservations.value = notes.objective_observations || '';
+        els.assessmentPlan.value = notes.assessment_plan || '';
+        state.medications = normalizeMedications(prescription);
+        renderMedicationRows();
+        els.pharmacyInstructions.value = prescription.pharmacy_instructions || '';
+
+        setButtons(false);
+    }
+
+    function renderAvatar(patient) {
+        if (patient.avatar) {
+            els.patientAvatar.innerHTML = '';
+            const image = document.createElement('img');
+            image.src = patient.avatar;
+            image.alt = patient.name;
+            els.patientAvatar.appendChild(image);
+            return;
+        }
+
+        els.patientAvatar.textContent = initials(patient.name);
+    }
+
+    function renderAllergies(allergies) {
+        els.allergyList.innerHTML = '';
+
+        allergies.forEach((allergy) => {
+            const pill = document.createElement('span');
+            pill.className = 'allergy-pill';
+            pill.textContent = `⚠ ${allergy}`;
+            els.allergyList.appendChild(pill);
+        });
+    }
+
+    function renderHistory(history) {
+        els.historyList.innerHTML = '';
+
+        history.forEach((item) => {
+            const article = document.createElement('article');
+            article.className = 'history-item';
+            article.tabIndex = 0;
+            article.setAttribute('role', 'button');
+            article.setAttribute('aria-label', `Open ${item.title}`);
+
+            const heading = document.createElement('div');
+            const title = document.createElement('strong');
+            const date = document.createElement('time');
+            title.textContent = item.title;
+            date.textContent = formatShortDate(item.date);
+            heading.append(title, date);
+
+            const summary = document.createElement('p');
+            summary.textContent = item.summary;
+
+            article.append(heading, summary);
+            article.addEventListener('click', () => openHistoryItem(item));
+            article.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openHistoryItem(item);
+                }
+            });
+            els.historyList.appendChild(article);
+        });
+    }
+
+    function openHistoryItem(item) {
+        const notes = item.clinical_notes || {};
+        const prescription = item.prescription || {};
+
+        els.chiefComplaint.value = notes.chief_complaint || '';
+        els.objectiveObservations.value = notes.objective_observations || '';
+        els.assessmentPlan.value = notes.assessment_plan || item.summary || '';
+        state.medications = normalizeMedications(prescription);
+        renderMedicationRows();
+        els.pharmacyInstructions.value = prescription.pharmacy_instructions || '';
+        showFeedback('success', `${item.title} opened in the records panel.`);
+    }
+
+    function renderMedicationRows() {
+        els.medicationList.innerHTML = '';
+
+        state.medications.forEach((medication, index) => {
+            const row = document.createElement('div');
+            row.className = 'prescription-grid';
+            row.dataset.index = String(index);
+
+            row.append(
+                medicationField('Medication Name', 'medication_name', medication.medication_name, 'e.g. Amoxicillin'),
+                medicationField('Dosage', 'dosage', medication.dosage, 'e.g. 500mg'),
+                frequencyField(medication.frequency),
+                removeMedicationButton(index)
+            );
+
+            els.medicationList.appendChild(row);
+        });
+    }
+
+    function medicationField(labelText, key, value, placeholder) {
+        const label = document.createElement('label');
+        const span = document.createElement('span');
+        const input = document.createElement('input');
+        span.textContent = labelText;
+        input.type = 'text';
+        input.value = value || '';
+        input.placeholder = placeholder;
+        input.addEventListener('input', () => {
+            state.medications[Number(input.closest('.prescription-grid').dataset.index)][key] = input.value;
+        });
+        label.append(span, input);
+        return label;
+    }
+
+    function frequencyField(value) {
+        const label = document.createElement('label');
+        const span = document.createElement('span');
+        const select = document.createElement('select');
+        span.textContent = 'Frequency';
+
+        ['Once daily', 'Twice daily', 'Every 8 hours', 'As needed'].forEach((optionText) => {
+            const option = document.createElement('option');
+            option.textContent = optionText;
+            option.selected = optionText === (value || 'Once daily');
+            select.appendChild(option);
+        });
+
+        select.addEventListener('change', () => {
+            state.medications[Number(select.closest('.prescription-grid').dataset.index)].frequency = select.value;
+        });
+        label.append(span, select);
+        return label;
+    }
+
+    function removeMedicationButton(index) {
+        const button = document.createElement('button');
+        button.className = 'remove-medication';
+        button.type = 'button';
+        button.setAttribute('aria-label', 'Remove medication');
+        button.innerHTML = '&times;';
+        button.disabled = state.medications.length === 1;
+        button.addEventListener('click', () => {
+            state.medications.splice(index, 1);
+            renderMedicationRows();
+        });
+        return button;
+    }
+
+    async function saveConsultation(complete) {
+        if (! state.consultation || ! state.consultation.id || state.saving) {
+            showFeedback('warning', 'The consultation is still loading. Please try again in a moment.');
+            return;
+        }
+
+        state.saving = true;
+        setButtons(true, complete ? 'Completing...' : 'Saving...');
+
+        try {
+            const endpoint = complete
+                ? `/api/reservations/${state.consultation.id}/complete`
+                : `/api/reservations/${state.consultation.id}/consultation`;
+            const response = await apiRequest(endpoint, {
+                method: 'PATCH',
+                body: JSON.stringify(formPayload()),
+            });
+
+            state.consultation = response.data?.consultation;
+            renderConsultation();
+            showFeedback('success', response.message || (complete ? 'Session completed.' : 'Records saved.'));
+        } catch (error) {
+            showFeedback('warning', error.message || 'Unable to save consultation records.');
+        } finally {
+            state.saving = false;
+            setButtons(false);
+        }
+    }
+
+    async function createNewConsultationRecord() {
+        if (state.saving) {
+            return;
+        }
+
+        state.saving = true;
+        setButtons(true, 'Creating...');
+
+        try {
+            const response = await apiRequest('/api/reservations/active-consultation', {
+                method: 'POST',
+                body: JSON.stringify({
+                    patient_id: document.body.dataset.patientId || null,
+                    doctor_id: document.body.dataset.doctorId || null,
+                }),
+            });
+
+            state.consultation = response.data?.consultation;
+            renderConsultation();
+            showFeedback('success', 'New consultation record is ready.');
+        } catch (error) {
+            showFeedback('warning', error.message || 'Unable to create a new consultation record.');
+        } finally {
+            state.saving = false;
+            setButtons(false);
+        }
+    }
+
+    function formPayload() {
+        return {
+            chief_complaint: els.chiefComplaint.value.trim(),
+            objective_observations: els.objectiveObservations.value.trim(),
+            assessment_plan: els.assessmentPlan.value.trim(),
+            prescription: {
+                medications: state.medications.map((medication) => ({
+                    medication_name: medication.medication_name.trim(),
+                    dosage: medication.dosage.trim(),
+                    frequency: medication.frequency || 'Once daily',
+                })),
+                pharmacy_instructions: els.pharmacyInstructions.value.trim(),
+            },
+        };
+    }
+
+    function setButtons(disabled, label = null) {
+        const hasConsultation = Boolean(state.consultation?.id);
+        els.saveRecords.disabled = disabled || ! hasConsultation;
+        els.completeSession.disabled = disabled || ! hasConsultation || state.consultation?.status === 'completed';
+        els.saveRecords.textContent = label && label.startsWith('Saving') ? `Save Records - ${label}` : 'Save Records';
+        els.completeSession.textContent = label && label.startsWith('Completing') ? `Mark as Complete - ${label}` : 'Mark as Complete';
+    }
+
+    function showFeedback(type, message) {
+        els.feedback.className = `consultation-feedback is-${type}`;
+        els.feedback.textContent = message;
+    }
+
+    async function apiRequest(path, options = {}) {
+        const token = localStorage.getItem('token')
+            || localStorage.getItem('auth_token')
+            || localStorage.getItem('access_token');
+        const response = await fetch(path, {
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                ...(options.headers || {}),
+            },
+            ...options,
+        });
+        const payload = await response.json().catch(() => ({
+            success: false,
+            message: 'Unexpected server response.',
+            data: {},
+        }));
+
+        if (! response.ok || payload.success === false) {
+            throw new Error(payload.message || 'Request failed.');
+        }
+
+        return payload;
+    }
+
+    function initials(name) {
+        return String(name || 'Patient')
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0]?.toUpperCase())
+            .join('');
+    }
+
+    function formatDob(dateValue) {
+        if (! dateValue) {
+            return '12/04/1978';
+        }
+
+        const [year, month, day] = dateValue.split('-');
+        return `${month}/${day}/${year}`;
+    }
+
+    function formatShortDate(dateValue) {
+        if (! dateValue) {
+            return '';
+        }
+
+        const [year, month, day] = dateValue.split('-').map(Number);
+        return new Intl.DateTimeFormat('en', {
+            month: 'short',
+            day: '2-digit',
+            year: 'numeric',
+        }).format(new Date(year, month - 1, day));
+    }
+
+    function normalizeMedications(prescription) {
+        const medications = Array.isArray(prescription.medications)
+            ? prescription.medications
+            : [];
+
+        const normalized = medications
+            .map((medication) => ({
+                medication_name: String(medication.medication_name || ''),
+                dosage: String(medication.dosage || ''),
+                frequency: String(medication.frequency || 'Once daily'),
+            }))
+            .filter((medication) => medication.medication_name || medication.dosage);
+
+        if (normalized.length) {
+            return normalized;
+        }
+
+        return [{
+            medication_name: String(prescription.medication_name || ''),
+            dosage: String(prescription.dosage || ''),
+            frequency: String(prescription.frequency || 'Once daily'),
+        }];
+    }
+
+    function blankMedication() {
+        return {
+            medication_name: '',
+            dosage: '',
+            frequency: 'Once daily',
+        };
+    }
+});

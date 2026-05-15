@@ -255,12 +255,283 @@
                     }
                 }
             }
+        },
+        "/api/doctors": {
+            "get": {
+                "tags": [
+                    "Doctors"
+                ],
+                "summary": "List and search doctors available for booking",
+                "operationId": "listDoctors",
+                "parameters": [
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Search doctor name or specialty",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "example": "sarah"
+                    },
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "Alias for search",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "example": "cardio"
+                    },
+                    {
+                        "name": "specialty",
+                        "in": "query",
+                        "description": "Filter doctors by specialty",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "example": "cardiology"
+                    },
+                    {
+                        "name": "available_time",
+                        "in": "query",
+                        "description": "Filter doctors by available time text",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 100
+                        },
+                        "example": "09:00"
+                    },
+                    {
+                        "name": "min_rating",
+                        "in": "query",
+                        "description": "Minimum doctor rating from 0 to 5",
+                        "required": false,
+                        "schema": {
+                            "type": "number",
+                            "maximum": 5,
+                            "minimum": 0
+                        },
+                        "example": 4
+                    },
+                    {
+                        "name": "available_today",
+                        "in": "query",
+                        "description": "Filter by doctors available today",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "example": true
+                    },
+                    {
+                        "name": "accepts_new_patients",
+                        "in": "query",
+                        "description": "Filter by doctors accepting new patients",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "example": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Doctors retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Doctors retrieved successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "doctors": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                }
+            }
+        },
+        "/api/doctors/{id}": {
+            "get": {
+                "tags": [
+                    "Doctors"
+                ],
+                "summary": "Show doctor details",
+                "operationId": "showDoctor",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "example": 1
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Doctor retrieved successfully"
+                    },
+                    "404": {
+                        "description": "Doctor not found"
+                    }
+                }
+            }
+        },
+        "/api/doctors/{id}/available-slots": {
+            "get": {
+                "tags": [
+                    "Doctors"
+                ],
+                "summary": "Get available appointment slots for a doctor and date",
+                "operationId": "doctorAvailableSlots",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "example": 1
+                    },
+                    {
+                        "name": "date",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "example": "2026-05-13"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Available slots retrieved successfully"
+                    },
+                    "404": {
+                        "description": "Doctor not found"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                }
+            }
+        },
+        "/api/reservations": {
+            "post": {
+                "tags": [
+                    "Reservations"
+                ],
+                "summary": "Book an appointment reservation",
+                "operationId": "createReservation",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "doctor_id",
+                                    "reservation_date",
+                                    "time_slot",
+                                    "patient_name",
+                                    "patient_email",
+                                    "patient_phone"
+                                ],
+                                "properties": {
+                                    "doctor_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "reservation_date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-05-13"
+                                    },
+                                    "time_slot": {
+                                        "type": "string",
+                                        "example": "10:00 AM"
+                                    },
+                                    "patient_name": {
+                                        "type": "string",
+                                        "example": "Mona Ahmed"
+                                    },
+                                    "patient_email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "mona@example.com"
+                                    },
+                                    "patient_phone": {
+                                        "type": "string",
+                                        "example": "01012345678"
+                                    },
+                                    "notes": {
+                                        "type": "string",
+                                        "example": "First visit",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Reservation created successfully"
+                    },
+                    "409": {
+                        "description": "Selected time slot is unavailable"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                }
+            }
         }
     },
     "tags": [
         {
             "name": "Auth",
             "description": "Auth"
+        },
+        {
+            "name": "Doctors",
+            "description": "Doctors"
+        },
+        {
+            "name": "Reservations",
+            "description": "Reservations"
         }
     ]
 }
